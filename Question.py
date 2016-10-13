@@ -1,6 +1,7 @@
-import html2text
+from html2text import HTML2Text
+
 class Question:
-#	'Class containing all important question details'
+# Class containing all important question details.
 	title = ''
 	question_body = ''
 	top_answer = ''
@@ -28,12 +29,13 @@ class Question:
 		if self.answerFetched:
 			try:
 				answer = self.parseResponseUnicode(self.answer)
-				h = html2text.HTML2Text()
+				h = HTML2Text()
 				h.ignore_links = True
 				answer = h.handle(answer)
 				self.answer = answer
-			except: 
+			except Exception as e: 
 				print "Couldn't parse answer: " + self.title
+				print e
 				self.parseFailed = True
 
 	# Set important values from StackExchange's JSON response to local values for this question object
@@ -49,17 +51,38 @@ class Question:
 		except: 
 			self.answer_id = 0
 			self.isAnswered = False
+			self.answerUnsatisfiable = True
 
 		self.question_score = JSON['score']
 		self.lastActivityDate = JSON['last_activity_date']
 
+	def addAnswerFromJSON(self, JSON, SCORE_MIN):
+	# Add answer values to question object
+	# IN: Takes in an answer JSON object as recieved from StackExchange API request
+	# OUT: Returns true if answer is approved, else marks question as unapproved.
+
+		if JSON['is_accepted'] == True and JSON['score'] >= SCORE_MIN:
+			# If answer has not been recorded or is higher scored, add/replace it.
+			if not self.answerFetched or JSON['score'] > self.answer_score:
+				self.answer = JSON['body'].encode('UTF-8')
+				self.answer_score = JSON['score']
+				self.answerFetched = True
+				approved = True
+		else:
+			self.answerUnsatisfiable = True
+			approved = False
+
+		return approved
+
 	def verifyData(self):
 		# Cannot have answers that are TOO long.
-		if (not len(self.title) <= 100) or (not len(self.question_body)) <= 2500 or (not len(self.answer) <= 2500):
+		if len(self.title) > 200 or len(self.answer) > 10000:
+			print 'Unsatisfiable'
 			self.answerUnsatisfiable = True
+		if len(self.question_body) > 5000:
+			self.question_body = 'Body too long: deleted.'
 
-	@staticmethod
-	def parseResponseUnicode(response):
+	def parseResponseUnicode(self, response):
 		# HTML Character sequences common in responses, to be further replace with the values below.
 		quote = '&quot;'
 		lessthan = "&lt;"

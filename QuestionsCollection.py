@@ -2,15 +2,15 @@ import pickle
 import requests
 from Question import Question
 from lxml import html
-import sys
 
 class QuestionsCollection:
 # 	'Class that contains questions along with their answers, and saves them locally.'
 	questions = []
-	question_id_index = {}  # Stores question id (key) pointing to index in array
-	answers = []
-	size = 0
+	question_id_index = {}  # Stores question id (key) pointing to index in arrayselssize = 0
 	next_page_to_fetch = 1
+	size = 0
+	htmlparse = True 		   # Set to True if you want to parse answer HTMLs (may hide some links, but provides clearer text)
+	SCORE_MIN = 20				 # Minimum score allowed for questions and answers
 
 	def initWithQuestions(self, questions, name):
 		# // Initialize the class 
@@ -20,25 +20,22 @@ class QuestionsCollection:
 
 	# Add a single JSON question object
 	def addQuestionJSON(self, questionJSON):
-		# // Add a question through it's JSON object representation 
-		# // Input: JSON object
+	# // Add a question through it's JSON object representation 
+	# // Input: JSON object
 		# Create a question object from JSON
 		question = Question()
 		question.createQuestionFromJSON(questionJSON)
+
 		# Add to local questions array and update size
 		self.questions.append(question)
 		self.size += 1
 
-		# Avoid any append errors from crashing the program
-		#try:
-			# Add to local array and update size
-		self.question_id_index[str(question.question_id)] = len(self.questions)-1
-		#except:
-		#	print "Couldn't add question. Failed to append to array."
+		# Add to id index dictionary
+		self.question_id_index[str(question.question_id)] = self.size-1
 
-	# Add an array of JSON question objects
 	def addQuestionsJSON(self, questionsJSON):
-		# questionsJSON is an array of JSON question objects, as recieved from StackExchange API
+	# Add an array of JSON question objects
+	# IN: questionsJSON is an array of JSON question objects, as recieved from StackExchange API
 		for questionJSON in questionsJSON:
 			self.addQuestionJSON(questionJSON) 
 
@@ -50,7 +47,6 @@ class QuestionsCollection:
 			self.question_id_index[question.question_id] = len(questions)-1
 			self.size += 1
 
-
 	# Add an array of question objects
 	def addQuestions(self, questions):
 		for question in questions:
@@ -58,12 +54,22 @@ class QuestionsCollection:
 
 	def addAnswersJSON(self, answersJSON):
 		# answersJSON is an array of JSON answer objects, as recieved from StackExchange API
-		for answerJSON in answersJSON:
-			try:
-				index = self.question_id_index[answerJSON['question_id']]
-				self.questions[index].answer = 'answer'
-			except:
-				print 'Couldn\'t find question for answer.'
+
+		# Keep track of number of 'approved' questions
+		numApproved = 0
+
+		for answer in answersJSON:
+			index = self.question_id_index[str(answer['question_id'])]
+			# Add JSON data to question object
+			
+			# If return value is True, means answer was approved
+			if self.questions[index].addAnswerFromJSON(answer, self.SCORE_MIN):
+				numApproved+= 1
+
+		# Process the questions (only take eligible ones, build id array, delete unsatisfiable, and a bunch of other stuff)
+		self.processQuestions()
+
+		return numApproved
 
   # Print questions info (title and score)
 	def printQuestions(self):
@@ -83,13 +89,6 @@ class QuestionsCollection:
 	def parseAnswers(self):
 		for question in self.questions:
 			question.parseAnswer()
-
-
-	def printQA(self, question):
-		print 'Question:\n '
-		print question.title
-		print '\nAnswer:\n '
-		print question.answer
 
 	def printNumOfQuestions(self):
 		print len(self.questions)
@@ -160,23 +159,28 @@ class QuestionsCollection:
 
 	########### DATA MANAGEMENT METHODS ############
 
-	SCORE_MIN = 20
-
 	def processQuestions(self):
-		self.buildQuestionIDIndex()
 
-		for index in reversed(range(0 ,len(self.questions))):
-			question = self.questions[index]
+		index = 0
+		for question in self.questions:
+			# Verify that the question data is within parameters, and does not have an unsatisfiable answer
 			question.verifyData()
 			# Build question id index dictionary
 			self.question_id_index[str(question.question_id)] = index
-			if (question.isAnswered != True) or (question.question_score < self.SCORE_MIN):
-				self.questions.pop(index)
+
+			if (question.isAnswered == True) and (question.question_score < self.SCORE_MIN):
+				question.answerUnsatisfiable = True
+
 			elif question.answerFetched:
 				if question.answer_score < self.SCORE_MIN:
-					self.questions.pop(index)
-				elif not question.parseFailed:
+					question.answerUnsatisfiable = True
+				# Try parsing the answer HTML only if hasn't failed before
+				elif not question.parseFailed and self.htmlparse == True:
 					question.parseAnswer()
+
+			index+= 1
+
+		self.deleteUnsatisfiableQuestions()
 
 
 	def deleteFailedParse(self):
@@ -189,7 +193,21 @@ class QuestionsCollection:
 	def deleteUnsatisfiableQuestions(self):
 		initialLen = len(self.questions)
 		# # Only keep all elements with satisfiable answers
-		self.questions[:] = [q for q in self.questions if not q.answerUnsatisfiable]
+		# self.questions[:] = [q for q in self.questions if not q.answerUnsatisfiable]
+		indexes = []
+		index = 0
+		for q in self.questions:
+			if q.answerUnsatisfiable == True:
+				indexes.append(index)
+			index+=1
+
+		if indexes == []:
+			print 'No questions to delete...'
+
+		else:
+			self.deleteQuestionIndexes(indexes)
+			print 'Success Deleting Unsatisfiable'
+
 		# for q in self.questions:
 		# 	if q.answerUnsatisfiable:
 		# 		print '+'
@@ -198,12 +216,11 @@ class QuestionsCollection:
 		return initialLen - finalLen
 
 	def deleteQuestionIndexes(self, questionIndexes):
-		questionIndexes.sort()
-		# Reverse for loop to iterate through indexes of questionIndexes array (reverse loop to avoid issues when deleting [index shifting])
-		for n in range(len(questionIndexes)-1, -1, -1):
-			print questionIndexes[n]
-			# Add one to question index, since removeQuestion takes questionNumber as argument
-			self.removeQuestion(questionIndexes[n]+1)
+		# Sort indexes in reverse order (to chew off the higher indexes, so lower are unaffected)
+		questionIndexes.sort(reverse=True)
+		for index in questionIndexes:
+			self.removeQuestion(index+1)   # +1 since function takes question number, not index
+			print 'Removing index ' + str(index) + ' out of ' + str(len(self.questions))
 
 	def buildQuestionIDIndex(self):
 		index = 0
@@ -215,7 +232,7 @@ class QuestionsCollection:
 	  approvedQuestions = []
 	  for question in self.questions:
 	  	if question.isAnswered == True:
-	  		if question.question_score > SCORE_MIN:
+	  		if question.question_score > self.SCORE_MIN:
 	  			approvedQuestions.append(question)
 
 	  return approvedQuestions
@@ -262,20 +279,20 @@ class QuestionsCollection:
 
 		return questionCollection
 
-	@staticmethod
-	def load(name):
-		saveFile = open(name, 'rb')
-		collection = pickle.load(saveFile)
-		saveFile.close()
-		collection.buildQuestionIDIndex()
+	def load(self, name):
+		# Load Basic Question Collection Info
+		loadFile = open(name, 'rb')
+		collection = pickle.load(loadFile)
+		loadFile.close()
+
+		# Load Questions Array
+		collection.loadQuestionsFromFile(name+str('Q'))
 		collection.processQuestions()
 
 		return collection
 
-	@staticmethod
-	def loadBackup(name):
-		return QuestionsCollection.load(name+'.bak')
-
+	def loadBackup(self, name):
+		return self.load(name+'.bak')
 
 	def save(self, name):
 		# Save the file by dumping with pickle
@@ -288,14 +305,17 @@ class QuestionsCollection:
 		pickle.dump(self, backupSaveFile)
 		backupSaveFile.close()
 
+		self.saveQuestionsToFile(name + str('Q'))
+
+	# Legacy Save
 	def saveToFile(self, name):
 		self.saveQuestionsToFile(name)
 		self.saveAnswersToFile(name)
 
+	# Legacy Load
 	def loadFromFile(self, name):
 		self.loadAnswersFromFile(name)
 		self.loadQuestionsFromFile(name)
-		self.buildQuestionIDIndex()
 
 
 	def saveQuestionsToFile(self, name):
@@ -330,9 +350,10 @@ class QuestionsCollection:
 	def verifyAllQuestions(self):
 		questionNumber = 1
 		for question in self.questions:
-			if (not question.approved) and question.answerFetched:
-				if not (self.verifyQuestion(questionNumber)):
-					return False
+			if not question.approved:
+				if question.answerFetched:
+					if not self.verifyQuestion(questionNumber):
+						return False
 			questionNumber += 1
 
 		return True
@@ -341,8 +362,8 @@ class QuestionsCollection:
 		# NOTE: Parameter is question number, not array index.
 		if questionNumber < 1 or questionNumber > len(self.questions):
 			print "ERROR in QuestionCollection.verifyQuestion(): index not in range"
-			sys.exit(-1)
-		index = questionNumber -1
+			return
+		index = questionNumber - 1
 		print '\n'
 		question = self.questions[index]
 		userInput = 'z'

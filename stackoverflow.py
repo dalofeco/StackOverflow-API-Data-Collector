@@ -20,14 +20,13 @@ class StackOverflow:
 			url1 = url.replace(PG_NUM, str(index))
 			response = requests.get(url1)
 			questionsJSONar.append(response.json())
-			try:
-				questions = []
-				for questionJSON in questionsJSONar:
-					if questionJSON is not None:
+			questions = []
+			for questionJSON in questionsJSONar:
+				if questionJSON is not None:
+					try:
 						questions += questionJSON['items']
-			except: 
-				print "Can't fetch questions..." + 'Page Number: ' + str(index)
-				return questions
+					except:
+						print "Could not fetch questions: API requests limit exceeded"
 
 		return questions
 
@@ -63,7 +62,7 @@ class StackOverflow:
 					idStrings[idIndex] += ';' + str(questionIDs[questionsIndex])
 					questionsIndex+=1
 
-			idIndex = hundredsQuestionNum
+			idIndex += 1
 
 
 		# Add the first one manually
@@ -107,25 +106,9 @@ class StackOverflow:
 					print "Error: Couldn't retrieve items API Limit Exceeded."
 					return
 
-		SCORE_MIN = 20
 
 		numRecieved = len(responses)
-		numApproved = 0
-
-		for answer in responses:
-			index = questionsCollection.question_id_index[str(answer['question_id'])]
-
-			if answer['is_accepted'] and answer['score'] >= SCORE_MIN:
-				questionsCollection.questions[index].answer = answer['body'].encode('UTF-8')
-				questionsCollection.questions[index].answer_score = answer['score']
-				questionsCollection.questions[index].answerFetched = True
-				numApproved+=1
-			else:
-				questionsCollection.questions[index].answerUnsatisfiable = True
-				# questionsCollection.removeQuestionByID(answer['question_id'])
-
-		# Process the questions (only take eligible ones and build id array and a bunch of other stuff)
-		questionsCollection.processQuestions()
+		numApproved = questionsCollection.addAnswersJSON(responses)
 
 		print 'Recieved: ' + str(numRecieved) + ' answers.'
 		print 'Approved: ' + str(numApproved) + ' answers.'
@@ -155,7 +138,178 @@ class StackOverflow:
 
 ## END OF CLASS DECLARATION
 
+# REAL EXECTUION
 
+DEFAULT_FILE_NAME = 'questionsCollection'
+AUTO_LOAD = False
+COLLECTION_LOADED = False
+
+collection = QuestionsCollection()
+
+if AUTO_LOAD:
+	print 'Auto loading...'
+	# Load questions and answers from file
+	collection.loadFromFile('QA')
+	# Process the questions (only take eligible ones and build id array and a bunch of other stuff)
+	collection.processQuestions()
+	COLLECTION_LOADED = True
+
+# User Input Interactive Loop
+userInput = 'z'
+while userInput != 'X' and userInput != 'XS':
+
+	# If collection is loaded, show relevant functionality, else, allow user to create or load
+	if COLLECTION_LOADED:
+		# Show more options
+		if userInput == 'M':
+			print "More Options:\n\tDFP: Delete Failed Parse\n\tUID: Get Unanswered Question IDS\n\tPN: Print Number of Questions\n\tPQ: Process Questions\n"
+		# Print standard options message
+		else:
+			print "Options:\n\tL: Load Questions\n\tS: Save Questions\n\tXS: Save and Quit\n\tX: Quit without Saving\n\tRQ: Request Questions from API\n\tRA: Requests Answers for Questions from API\n\tPA: Parse Answers\n\tA: Approve Questions\n\tP: Print Approved With Filter\n\tM: Show More Options"
+		
+		# Get user input
+		userInput = raw_input('What do you want to do? ').upper()
+
+		# Load from file
+		if userInput == 'L':
+			# Load questions and answers from file
+			collection = collection.load(DEFAULT_FILE_NAME)
+			print 'Loaded!'
+			print collection.questions
+
+		# Request Questions from API
+		if userInput == 'RQ': 
+			START_PAGE = collection.next_page_to_fetch
+			starting = raw_input('Starting at page ' + str(START_PAGE) + '? or start at page: ')
+			if starting != '':
+				try:
+					START_PAGE = int(starting)
+					print 'Starting at: ' + str(START_PAGE)
+				except:
+					START_PAGE = collection.next_page_to_fetch
+			try:
+				NUM_OF_PAGES = int(input("How many pages would you like to fetch? (default 10): "))
+			except:
+				print 'Assuming default of 10 pages.'
+				NUM_OF_PAGES = 10
+			print 'Fetching ' + str(NUM_OF_PAGES) + ' pages.'
+			if NUM_OF_PAGES != 0:
+				try:
+					# Request questions
+					so = StackOverflow()
+					questions_JSON_list = so.requestQuestionsFromAPI(START_PAGE, NUM_OF_PAGES)
+				
+					# Add new questions to the collection
+					collection.addQuestionsJSON(questions_JSON_list)
+					# Update next page to fetch for next fetching time
+					collection.next_page_to_fetch = START_PAGE + NUM_OF_PAGES
+					print "Successfully requested " + str(NUM_OF_PAGES * 100) + " questions!"
+
+				except Exception as e:
+					print "Error fetching questions. API is probably be blocking your IP from excessive requests."
+					print e
+				finally:
+					# Process the questions (only take eligible ones and build id array and a bunch of other stuff)
+					collection.processQuestions()
+			else:
+				collection.next_page_to_fetch = START_PAGE
+				
+
+		# Request Answers from API
+		elif userInput == 'RA':
+			# try:
+			# Fetch the answers
+			so = StackOverflow()
+			so.fetchAnswersForQuestionsCollection(collection)
+			# except Exception as e:
+			# 	print e
+			# 	print "Error fetching answers. There are no answers to fetch?"
+
+		# Parse all unparsed answers
+		elif userInput == 'PA':
+			collection.parseAnswers()
+			print 'Answers parsed! Use \'DFP\' to delete failed parses. (not recommended if HTML encoding on answers doesn\'t matter)'
+
+		# Delete all questions whose answer failed to parse
+		elif userInput == 'DFP':
+			collection.deleteFailedParse()
+
+		# Start user validation of questions
+		elif userInput == 'A':
+			collection.verifyAllQuestions()
+			print 'Done verifying questions!'
+		
+		# Print questions with filter
+		elif userInput == 'P':
+			collection.printApprovedQuestionsWithFilter(raw_input("Please input a filter (a tag/keyword)(or nothing to print all): "))
+
+		# Print number of questions
+		elif userInput == 'PN': 
+			collection.printNumOfQuestions()
+
+		# Save to file
+		elif userInput == 'XS' or userInput == 'S':
+			collection.save(DEFAULT_FILE_NAME)
+			print 'Saved!'
+
+		# Process Questions
+		elif userInput == 'PQ':
+			numberDeleted = collection.deleteUnsatisfiableQuestions()
+			print 'Deleted ' + str(numberDeleted) + ' unsatisfiable questions!'
+
+		# Print unanswered question ids
+		elif userInput == 'UID':
+			# unanswered ids
+			count = 0
+			ids = collection.getUnansweredQuestionIDs()
+			for i in ids:
+				print i
+				count += 1
+
+			print 'Length: ' + str(count)
+
+		# Process Questions
+		elif userInput == 'PQ':
+			collection.processQuestions()
+	
+	# NO COLLECTION LOADED
+	else: 
+		print "Options:\n\tB: Build New Collection\n\tL: Load Questions Collection\n\tX: Quit\n"
+		
+		# Get user input
+		userInput = raw_input('>> ').upper()
+		# Load from file
+		if userInput == 'L':
+			# Load questions and answers from file
+			collection = collection.load(DEFAULT_FILE_NAME)
+			print 'Loaded!'
+			COLLECTION_LOADED = True
+
+		elif userInput == 'B':
+			collection = QuestionsCollection()
+
+			# Get user preference on parsing HTML responses
+			userPreference = 'X'
+			try:
+				userPreference = raw_input('Would you like to parse html responses? (Y/n): ').upper()
+			except:
+				print "Assuming default input of Y"
+			finally:
+				if userPreference != 'N':
+					collection.htmlparse = True
+
+			scoreMin = 20
+			try:
+				scoreMinStr = raw_input('What is the minimum accepted question & answer scores? (default: 20)')
+				if scoreMinStr == '':
+					scoreMin = 20
+				else:
+					scoreMin = int(scoreMinStr)
+			except:
+				print 'Assuming default minimum of 20'
+			collection.SCORE_MIN = scoreMin
+
+			COLLECTION_LOADED = True
 
 
 
