@@ -1,11 +1,9 @@
-# so = stackexchange.Site(stackexchange.StackOverflow, 'j6XYWgnl9uQbzCtYHyoACA((')
-# content = urllib2.urlopen()
 import pickle
 import requests
 from Question import Question
 from QuestionsCollection import QuestionsCollection
 
-API_KEY = "j6XYWgnl9uQbzCtYHyoACA(("
+API_KEY = ""
 
 class StackOverflow:
 	def requestQuestionsFromAPI(self, startPage, numOfPages):
@@ -15,13 +13,18 @@ class StackOverflow:
 
 		# strings representing variables in request URL
 		PG_NUM = "<PG_NUM>"
+		KEY_PARAM = "&key="
 		KEY = "<KEY>"
 		questionsJSONar = []
 		questions = []
 		baseurl = "http://api.stackexchange.com/2.2/questions?page=<PG_NUM>&pagesize=100&fromdate=1159574400&todate=1483056000&order=desc&sort=activity&tagged=c%2B%2B;visual-studio&site=stackoverflow&key=<KEY>&filter=!9YdnSIN18"
 		
-		# ADD API KEY to URL
-		url = baseurl.replace(KEY, API_KEY)
+		# ADD API KEY to URL only if key provided, else remove argument from URL
+		if API_KEY == "":
+			url = baseurl.replace(KEY,'')
+			url = url.replace(KEY_PARAM, '')
+		else:
+			url = baseurl.replace(KEY, API_KEY)
 
 		# Make requests for each page relevant
 		for index in range(startPage, numOfPages+startPage):
@@ -43,10 +46,18 @@ class StackOverflow:
 		# Output: Array with JSON objects for answer items (key) (as recieved from api.stackexchange.com)
 		IDS = "<IDS>"
 		KEY = "<KEY>"
+		KEY_PARAM = "&key="
 		responsesAr = []
-		baseURL = "https://api.stackexchange.com/2.2/answers/<IDS>?fromdate=1159660800&order=desc&sort=activity&site=stackoverflow&key=<KEY>&filter=!9YdnSMKKT".replace(KEY, API_KEY)
+		url = "https://api.stackexchange.com/2.2/answers/<IDS>?fromdate=1159660800&order=desc&sort=activity&site=stackoverflow&key=<KEY>&filter=!9YdnSMKKT"
 		questionIDs = questionsCollection.getUnfetchedAnswerIDs()
 		numOfQuestions = len(questionIDs)
+
+		# ADD API KEY to URL only if key provided, else remove argument from URL
+		if API_KEY == "":
+			baseURL = url.replace(KEY,'')
+			baseURL = baseURL.replace(KEY_PARAM, '')
+		else:
+			baseURL = url.replace(KEY, API_KEY)
 
 		# Keep track of the current url id strings array id
 		idStringsIndex = 0
