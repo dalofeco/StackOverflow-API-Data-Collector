@@ -5,6 +5,8 @@ import requests
 from Question import Question
 from QuestionsCollection import QuestionsCollection
 
+API_KEY = "j6XYWgnl9uQbzCtYHyoACA(("
+
 class StackOverflow:
 	def requestQuestionsFromAPI(self, startPage, numOfPages):
 		# Requests questions from the API 100 at a time
@@ -13,14 +15,19 @@ class StackOverflow:
 
 		# strings representing variables in request URL
 		PG_NUM = "<PG_NUM>"
+		KEY = "<KEY>"
 		questionsJSONar = []
+		questions = []
+		baseurl = "http://api.stackexchange.com/2.2/questions?page=<PG_NUM>&pagesize=100&fromdate=1159574400&todate=1483056000&order=desc&sort=activity&tagged=c%2B%2B;visual-studio&site=stackoverflow&key=<KEY>&filter=!9YdnSIN18"
+		
+		# ADD API KEY to URL
+		url = baseurl.replace(KEY, API_KEY)
 
-		url = "http://api.stackexchange.com/2.2/questions?page=<PG_NUM>&pagesize=100&fromdate=1159574400&todate=1483056000&order=desc&sort=activity&tagged=c%2B%2B&site=stackoverflow&filter=!9YdnSIN18"
+		# Make requests for each page relevant
 		for index in range(startPage, numOfPages+startPage):
 			url1 = url.replace(PG_NUM, str(index))
 			response = requests.get(url1)
 			questionsJSONar.append(response.json())
-			questions = []
 			for questionJSON in questionsJSONar:
 				if questionJSON is not None:
 					try:
@@ -35,18 +42,22 @@ class StackOverflow:
 		# Input: List with Question IDs
 		# Output: Array with JSON objects for answer items (key) (as recieved from api.stackexchange.com)
 		IDS = "<IDS>"
+		KEY = "<KEY>"
 		responsesAr = []
-		baseURL =	"https://api.stackexchange.com/2.2/questions/<IDS>/answers?fromdate=1159660800&order=desc&sort=activity&site=stackoverflow&filter=!9YdnSMKKT"
-		idStrings = []
-		questionIDs = questionsCollection.getUnansweredQuestionIDs()
+		baseURL = "https://api.stackexchange.com/2.2/answers/<IDS>?fromdate=1159660800&order=desc&sort=activity&site=stackoverflow&key=<KEY>&filter=!9YdnSMKKT".replace(KEY, API_KEY)
+		questionIDs = questionsCollection.getUnfetchedAnswerIDs()
 		numOfQuestions = len(questionIDs)
-		idIndex = 0
 
-	# Keep track of the current question being checked
+		# Keep track of the current url id strings array id
+		idStringsIndex = 0
+		idStrings = []
+
+		# Keep track of the current question id being checked
 		questionsIndex = 0;
 
 		restQuestionsNum = numOfQuestions%100
 
+		# Build id strings for all exact groups of 100 if there are more than 100
 		if numOfQuestions > 100:
 			hundredsQuestionNum = numOfQuestions/100
 
@@ -62,17 +73,17 @@ class StackOverflow:
 					idStrings[idIndex] += ';' + str(questionIDs[questionsIndex])
 					questionsIndex+=1
 
-			idIndex += 1
-
+			# Move tracker index variable on to next id string
+			idStringsIndex = len(idStrings)
 
 		# Add the first one manually
 		idStrings.append('')
-		idStrings[idIndex] += str(questionIDs[questionsIndex])	
+		idStrings[idStringsIndex] += str(questionIDs[questionsIndex])	
 		questionsIndex +=1
 
 		# And loop through the rest
 		for i in range(1, restQuestionsNum):
-			idStrings[idIndex] += ';' + str(questionIDs[questionsIndex])
+			idStrings[idStringsIndex] += ';' + str(questionIDs[questionsIndex])
 			questionsIndex+=1
 
 		urls = [baseURL] * len(idStrings)	# add a baseURL to request for every id string built
@@ -162,10 +173,10 @@ while userInput != 'X' and userInput != 'XS':
 	if COLLECTION_LOADED:
 		# Show more options
 		if userInput == 'M':
-			print "More Options:\n\tDFP: Delete Failed Parse\n\tUID: Get Unanswered Question IDS\n\tPN: Print Number of Questions\n\tPQ: Process Questions\n"
+			print "More Options:\n\tDFP: Delete Failed Parse\n\tPA: Parse Answers\n\tUID: Get Unanswered Question IDS\n\tPN: Print Number of Questions\n\tPQ: Process Questions\n"
 		# Print standard options message
 		else:
-			print "Options:\n\tL: Load Questions\n\tS: Save Questions\n\tXS: Save and Quit\n\tX: Quit without Saving\n\tRQ: Request Questions from API\n\tRA: Requests Answers for Questions from API\n\tPA: Parse Answers\n\tA: Approve Questions\n\tP: Print Approved With Filter\n\tM: Show More Options"
+			print "Options:\n\tL: Load Questions\n\tS: Save Questions\n\tX: Quit without Saving\n\tXS: Save and Quit\n\tRQ: Request Questions from API\n\tRA: Requests Answers for Questions from API\n\tA: Approve Questions\n\tP: Print Approved With Filter\n\tM: Show More Options"
 		
 		# Get user input
 		userInput = raw_input('What do you want to do? ').upper()
@@ -217,13 +228,13 @@ while userInput != 'X' and userInput != 'XS':
 
 		# Request Answers from API
 		elif userInput == 'RA':
-			# try:
-			# Fetch the answers
-			so = StackOverflow()
-			so.fetchAnswersForQuestionsCollection(collection)
-			# except Exception as e:
-			# 	print e
-			# 	print "Error fetching answers. There are no answers to fetch?"
+			try:
+				# Fetch the answers
+				so = StackOverflow()
+				so.fetchAnswersForQuestionsCollection(collection)
+			except Exception as e:
+				print e
+				print "Error fetching answers. There are no answers to fetch?"
 
 		# Parse all unparsed answers
 		elif userInput == 'PA':
@@ -254,8 +265,7 @@ while userInput != 'X' and userInput != 'XS':
 
 		# Process Questions
 		elif userInput == 'PQ':
-			numberDeleted = collection.deleteUnsatisfiableQuestions()
-			print 'Deleted ' + str(numberDeleted) + ' unsatisfiable questions!'
+			collection.processQuestions()
 
 		# Print unanswered question ids
 		elif userInput == 'UID':
@@ -268,9 +278,8 @@ while userInput != 'X' and userInput != 'XS':
 
 			print 'Length: ' + str(count)
 
-		# Process Questions
-		elif userInput == 'PQ':
-			collection.processQuestions()
+		elif userInput != 'X':
+			print 'Could not understand your input, try again...'
 	
 	# NO COLLECTION LOADED
 	else: 

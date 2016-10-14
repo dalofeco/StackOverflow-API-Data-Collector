@@ -22,6 +22,9 @@ class Question:
 		if type(tag) is str:
 			tags.append(tag)
 
+	def markUnsatisfiable(self):
+		self.answerUnsatisfiable = True
+
 	def approve(self):
 		self.approved = True
 
@@ -52,6 +55,7 @@ class Question:
 			self.answer_id = 0
 			self.isAnswered = False
 			self.answerUnsatisfiable = True
+			print 'No accepted answer id.'
 
 		self.question_score = JSON['score']
 		self.lastActivityDate = JSON['last_activity_date']
@@ -69,6 +73,7 @@ class Question:
 				self.answerFetched = True
 				approved = True
 		else:
+			print 'Answer not accepted'
 			self.answerUnsatisfiable = True
 			approved = False
 

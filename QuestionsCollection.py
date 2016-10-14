@@ -5,18 +5,12 @@ from lxml import html
 
 class QuestionsCollection:
 # 	'Class that contains questions along with their answers, and saves them locally.'
-	questions = []
-	question_id_index = {}  # Stores question id (key) pointing to index in arrayselssize = 0
+
+	questions = {}  # Stores question id (key) pointing to question objects
 	next_page_to_fetch = 1
 	size = 0
 	htmlparse = True 		   # Set to True if you want to parse answer HTMLs (may hide some links, but provides clearer text)
 	SCORE_MIN = 20				 # Minimum score allowed for questions and answers
-
-	def initWithQuestions(self, questions, name):
-		# // Initialize the class 
-		# // Input: questions (array) & a name (string)
-		self.questions = questions
-		self.size = len(questions)
 
 	# Add a single JSON question object
 	def addQuestionJSON(self, questionJSON):
@@ -26,12 +20,11 @@ class QuestionsCollection:
 		question = Question()
 		question.createQuestionFromJSON(questionJSON)
 
-		# Add to local questions array and update size
-		self.questions.append(question)
+		# Add to question to question id dictionary and update size
+		self.questions[str(question.question_id)] = question
 		self.size += 1
 
 		# Add to id index dictionary
-		self.question_id_index[str(question.question_id)] = self.size-1
 
 	def addQuestionsJSON(self, questionsJSON):
 	# Add an array of JSON question objects
@@ -43,27 +36,24 @@ class QuestionsCollection:
 	def addQuestion(self, question):
 		# Directly add question (trusted)
 		if type(question) is Question:
-			self.questions.append(question)
-			self.question_id_index[question.question_id] = len(questions)-1
-			self.size += 1
+			self.questions[str(question.question_id)] = question 	# add to dict
+			self.size += 1 																			# update collection size
 
 	# Add an array of question objects
 	def addQuestions(self, questions):
-		for question in questions:
+		for qid, question in questions.iteritems():
 			self.addQuestion(question);
 
 	def addAnswersJSON(self, answersJSON):
-		# answersJSON is an array of JSON answer objects, as recieved from StackExchange API
-
+	# answersJSON is an array of JSON answer objects, as recieved from StackExchange API
 		# Keep track of number of 'approved' questions
 		numApproved = 0
 
 		for answer in answersJSON:
-			index = self.question_id_index[str(answer['question_id'])]
-			# Add JSON data to question object
-			
-			# If return value is True, means answer was approved
-			if self.questions[index].addAnswerFromJSON(answer, self.SCORE_MIN):
+		# If return value is True, means answer was approved
+			if self.questions[str(answer['question_id'])].addAnswerFromJSON(answer, self.SCORE_MIN):	# Add JSON data to question object
+			#   [ 				QUESTION OBJECT 							] -> (add answer function from answer with minimum score of: )
+				
 				numApproved+= 1
 
 		# Process the questions (only take eligible ones, build id array, delete unsatisfiable, and a bunch of other stuff)
@@ -73,38 +63,35 @@ class QuestionsCollection:
 
   # Print questions info (title and score)
 	def printQuestions(self):
-		for question in self.questions:
+		for qid, question in self.questions.iteritems():
 			print question.title + ' ; Score= ' + str(question.question_score)
 		print "Length: " + str(len(self.questions))
 
 	def printAnswers(self):
 		count = 0
-		for question in self.questions:
+		for qid, question in self.questions.iteritems():
 			if question.answerFetched:
 				count+=1
 				print question.answer
 				
 		print "Answers #: " + str(count)
 
-	def parseAnswers(self):
-		for question in self.questions:
-			question.parseAnswer()
 
 	def printNumOfQuestions(self):
 		print len(self.questions)
 
 	def printApprovedQuestions(self):
-		numOfQ = 0
+		approvedQ = 0
 		questionNumber = 1
-		for question in self.questions:
+		for qid, question in self.questions.iteritems():
 			if question.approved:
 				print str(questionNumber) + '. '+ question.title + '\n'
 				print question.answer
-				numOfQ += 1
+				approvedQ += 1
 
 			questionNumber +=1
 
-		print 'Length: ' + str(numOfQ) + '\n'
+		print 'Length: ' + str(approvedQ) + '\n'
 
 	def printApprovedQuestionsWithFilter(self, filterA):
 	# Filter is a string that will be queried in the question and answer to find relevancy
@@ -113,7 +100,7 @@ class QuestionsCollection:
 		else:
 			numOfQ = 0
 			questionNumber = 1
-			for question in self.questions:
+			for qid, question in self.questions.iteritems():
 				if question.approved:
 					if filterA in question.title or filterA in question.answer:
 						print str(questionNumber) + '. '+ question.title + '\n'
@@ -125,16 +112,10 @@ class QuestionsCollection:
 				questionNumber += 1
 			print 'Length: ' + str(numOfQ)
 
-		# def deleteUnsatisfiableQuestions(self):
-		# 	number = 0
-		# 	for question in self.questions:
-		# 		if question.answerFetched == True and question.answer == '':
-
-
 	# Return all question's answer IDs
 	def getAllAnswerIDs(self):
 		ids = []
-		for question in self.questions:
+		for qid, question in self.questions.iteritems():
 			if question.isAnswered:
 				ids.append(question.answer_id)
 
@@ -154,115 +135,152 @@ class QuestionsCollection:
 		return stringAnswer
 
 	def fetchAnswerValues(self):
-		for question in self.questions:
+		for qid, question in self.questions.iteritems():
 			question.answer = self.fetchAnswerValue(question.answer_id)
 
 	########### DATA MANAGEMENT METHODS ############
 
-	def processQuestions(self):
+	def verifyAllQuestions(self):
+		questionNumber = 1
+		for qid, question in self.questions.iteritems():
+			if not question.approved:
+				if question.answerFetched:
+					if not self.verifyQuestion(question, questionNumber):
+						return False		
+			questionNumber += 1
+		return True
 
-		index = 0
-		for question in self.questions:
+		self.processQuestions()
+
+	def verifyQuestion(self, question, questionNumber):
+		# NOTE: Parameter is question number, not array index.
+		# IN: Question to verify
+		# OUT: return true to verify next question, false to stop (if called by verifyAllQuestions)
+		print '\n'
+		userInput = 'z'
+		print str(questionNumber) + '. ' + question.title + '\n'
+		while userInput != 'I':
+			print "Input 'a' to print the answer, 'as' for answer score, 'qs' for question score, 'x' to quit (continue later)\n'q' for question, 'qb' for question body, d' to delete, 'i' to ignore, and 'p' to approve: " 
+			userInput = raw_input("Options: a, as, qs, q, d, i, p: ")
+			userInput = userInput.upper()
+			print '\n'
+			if userInput == 'A':
+				print question.answer + '\n'
+			elif userInput == 'AS': 
+				print 'Answer Score: ' + str(question.answer_score) + '\n'
+			elif userInput == 'QS':
+				print 'Question Score: ' + str(question.question_score) + '\n'
+			elif userInput == 'QB':
+				print question.question_body + '\n'
+			elif userInput == 'D':
+				self.questions[str(question.question_id)].markUnsatisfiable()
+				userInput = 'I'
+			elif userInput == 'I':
+				print 'Ignoring...\n'
+			elif userInput == 'P':
+				self.approveQuestion(question.question_id)
+				userInput = 'I'
+			elif userInput == 'Q':
+				print str(questionNumber) + '. ' + question.title + '\n'
+			elif userInput == 'X':
+				return False
+
+		# END QUESTION VERIFICATION WHILE LOOP
+
+		return True
+
+	# END VERIFY QUESTION FUNCTION
+
+	def processQuestions(self):
+		print 'Processing questions... 	'
+
+		for qid, question in self.questions.iteritems():
 			# Verify that the question data is within parameters, and does not have an unsatisfiable answer
 			question.verifyData()
-			# Build question id index dictionary
-			self.question_id_index[str(question.question_id)] = index
 
-			if (question.isAnswered == True) and (question.question_score < self.SCORE_MIN):
-				question.answerUnsatisfiable = True
-
-			elif question.answerFetched:
-				if question.answer_score < self.SCORE_MIN:
+			# If question has no accepted answer or the score is too low:
+			if (question.isAnswered == False) or (question.question_score < self.SCORE_MIN):
+				question.answerUnsatisfiable = True 
+				print 'Question has no answer or score too little. Deleting...'
+			
+			elif question.answerFetched == True: # If question answer has been fetched
+				# and the answer score is too low
+				if question.answer_score < self.SCORE_MIN: 
 					question.answerUnsatisfiable = True
-				# Try parsing the answer HTML only if hasn't failed before
+					print 'Answer score too low. Deleting...'
+				# (or) and the answer hasn't failed parse AND html parse is on
 				elif not question.parseFailed and self.htmlparse == True:
-					question.parseAnswer()
+					question.parseAnswer() # parse the answer
 
-			index+= 1
-
+		# Delete all unsatisfiable questions from system.
 		self.deleteUnsatisfiableQuestions()
 
+	def parseAnswers(self):
+		for qid, question in self.questions.iteritems():
+			question.parseAnswer()
 
 	def deleteFailedParse(self):
-		index = 0
-		for question in self.questions:
+		idsToDelete = []
+		for qid, question in self.questions.iteritems():
 			if question.parseFailed == True:
-				self.questions.pop(index)
-			index += 1
+				idsToDelete.append(qid)
+		
+		numDeleted = self.deleteQuestions(idsToDelete)
+
+		print 'Successfully deleted ' + str(numDeleted) + ' failed parse questions.'
 
 	def deleteUnsatisfiableQuestions(self):
-		initialLen = len(self.questions)
+		qidsToDelete = []
+
 		# # Only keep all elements with satisfiable answers
-		# self.questions[:] = [q for q in self.questions if not q.answerUnsatisfiable]
-		indexes = []
-		index = 0
-		for q in self.questions:
+		for qid, q in self.questions.iteritems():
 			if q.answerUnsatisfiable == True:
-				indexes.append(index)
-			index+=1
+				qidsToDelete.append(qid)
 
-		if indexes == []:
-			print 'No questions to delete...'
+		numDeleted = self.deleteQuestions(qidsToDelete)
 
-		else:
-			self.deleteQuestionIndexes(indexes)
-			print 'Success Deleting Unsatisfiable'
+		print 'Successfully deleted ' + str(numDeleted) + ' unsatisfiable questions.'
 
-		# for q in self.questions:
-		# 	if q.answerUnsatisfiable:
-		# 		print '+'
-		finalLen = len(self.questions)
+	def deleteQuestions(self, qids):
+		# Deletes questions for question ids (qids = list)
+		# Returns num of qids successfully deleted
+		num = 0
+		for qid in qids:
+			try:
+				self.deleteQuestion(qid)
+				num+=1
+			except Exception as e:
+				print "Could not delete question " + str(qid) + ": " + str(e)
+		return num
 
-		return initialLen - finalLen
-
-	def deleteQuestionIndexes(self, questionIndexes):
-		# Sort indexes in reverse order (to chew off the higher indexes, so lower are unaffected)
-		questionIndexes.sort(reverse=True)
-		for index in questionIndexes:
-			self.removeQuestion(index+1)   # +1 since function takes question number, not index
-			print 'Removing index ' + str(index) + ' out of ' + str(len(self.questions))
-
-	def buildQuestionIDIndex(self):
-		index = 0
-		for question in self.questions:
-			self.question_id_index[str(question.question_id)] = index
-			index +=1
+	# Deletes the question from the dictionary corresponding to the question ID 
+	def deleteQuestion(self, qid):
+		del self.questions[str(qid)]
 
 	def getApprovedQuestions(self):
 	  approvedQuestions = []
-	  for question in self.questions:
-	  	if question.isAnswered == True:
+	  for qid, question in self.questions.iteritems():
+	  	if question.isAnswered:
 	  		if question.question_score > self.SCORE_MIN:
 	  			approvedQuestions.append(question)
-
 	  return approvedQuestions
 
 	def getUnansweredQuestionIDs(self):
 		unanswered = []
-		for question in self.questions:
+		for qid, question in self.questions.iteritems():
 			if not question.answerFetched:
-				unanswered.append(question.question_id)
-
+				unanswered.append(qid)
 		return unanswered
 
-	def removeQuestion(self, questionNumber):
-		self.questions.pop(questionNumber-1)
+	def getUnfetchedAnswerIDs(self):
+		unanswered = []
+		for qid, question in self.questions.iteritems():
+			if not question.answerFetched:
+				unanswered.append(question.answer_id)
+		return unanswered
 
-	def removeQuestionByID(self, questionID):
-		index = self.question_id_index[str(questionID)]
-		# if index is out of bounds
-		if (index >= len(self.questions)) or (index < 0):
-			print "Attempting to remove question " + str(questionID) + ' with index ' + str(index) + ' out of ' + str(len(self.questions)) + ' questions.'
-		else:
-			self.questions.pop(index)
-			self.updateIDDictAfter(index)
-
-	def updateIDDictAfter(self, index):
-		for i in range(index, len(self.questions)):
-			self.question_id_index[str(self.questions[i].question_id)] = i 
-
-	def approveQuestion(self, questionNumber):
-		self.questions[questionNumber-1].approve()
+	def approveQuestion(self, qid):
+		self.questions[str(qid)].approve()
 
 	########## FILE SAVING METHODS ##########
 
@@ -307,17 +325,6 @@ class QuestionsCollection:
 
 		self.saveQuestionsToFile(name + str('Q'))
 
-	# Legacy Save
-	def saveToFile(self, name):
-		self.saveQuestionsToFile(name)
-		self.saveAnswersToFile(name)
-
-	# Legacy Load
-	def loadFromFile(self, name):
-		self.loadAnswersFromFile(name)
-		self.loadQuestionsFromFile(name)
-
-
 	def saveQuestionsToFile(self, name):
 		saveFile = open('questions/'+str(name), "wb")
 		pickle.dump(self.questions, saveFile)
@@ -332,74 +339,20 @@ class QuestionsCollection:
 		loadFile.close()
 		self.size = len(self.questions)
 
+		# Legacy Save
+	def saveToFile(self, name):
+		self.saveQuestionsToFile(name)
+		self.saveAnswersToFile(name)
 
-	def saveAnswersToFile(self, name):
-		# Input: QuestionsCollection name (string)
-		saveFile = open('answers/'+str(name), "wb")
-		pickle.dump(self.answers, saveFile)
-		saveFile.close()
+	# Legacy Load
+	def loadFromFile(self, name):
+		self.loadAnswersFromFile(name)
+		self.loadQuestionsFromFile(name)
 
-	def loadAnswersFromFile(self, name):
-		# Loads answers from file at answers/<name>
-		# Input: Collection name (string)
-		# Output: Answers array
-		loadFile = open('answers/'+str(name), "rb")
-		self.answers = pickle.load(loadFile)
-		loadFile.close()
 
-	def verifyAllQuestions(self):
-		questionNumber = 1
-		for question in self.questions:
-			if not question.approved:
-				if question.answerFetched:
-					if not self.verifyQuestion(questionNumber):
-						return False
-			questionNumber += 1
+# END QuestionsCollection.py
 
-		return True
 
-	def verifyQuestion(self, questionNumber):
-		# NOTE: Parameter is question number, not array index.
-		if questionNumber < 1 or questionNumber > len(self.questions):
-			print "ERROR in QuestionCollection.verifyQuestion(): index not in range"
-			return
-		index = questionNumber - 1
-		print '\n'
-		question = self.questions[index]
-		userInput = 'z'
-		print str(questionNumber) + '. ' + question.title + '\n'
-		while userInput != 'I':
-			print "Input 'a' to print the answer, 'as' for answer score, 'qs' for question score,\n'q' for question, d' to delete, 'i' to ignore, and 'p' to approve: " 
-			userInput = raw_input("Options: a, as, qs, q, d, i, p: ")
-			userInput = userInput.upper()
-			print '\n'
-			if userInput == 'A':
-				print question.answer + '\n'
-			elif userInput == 'AS': 
-				print 'Answer Score: ' + str(question.answer_score) + '\n'
-			elif userInput == 'QS':
-				print 'Question Score: ' + str(question.question_score) + '\n'
-			elif userInput == 'QB':
-				print question.question_body + '\n'
-			elif userInput == 'D':
-				self.removeQuestion(questionNumber)
-				questionNumber-=1
-				userInput = 'I'
-			elif userInput == 'I':
-				print 'Ignoring...\n'
-			elif userInput == 'P':
-				self.approveQuestion(questionNumber)
-				userInput = 'I'
-			elif userInput == 'Q':
-				print str(questionNumber) + '. ' + question.title + '\n'
-			elif userInput == 'X':
-				return False
-
-		# END QUESTION VERIFICATION WHILE LOOP
-
-		return True
-
-	# END VERIFY QUESTION FUNCTION
 
 
 	
