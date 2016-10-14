@@ -23,8 +23,8 @@ Download and execute "stackoverflow.py" using python with no arguments. An inter
 ## Dependencies:
 1. Pickle (for file saving)
 2. Requests (python library for making HTTP requests)
-3. LXML (HTML parsing library, used for legacy answer searching [without using API])
-4. HTML2Text.py (Included): HTML parsing library by Aaron Swartz
+3. HTML2Text.py (Included): HTML parsing library by Aaron Swartz
+4. LXML [Not-necessary] (HTML parsing library, used for legacy answer searching [without using API]): This can be commented out at line 4 of stackoverflow.py, if not present in machine (not used in standard stackoverflow.py execution)
 
 ## IMPORTANT NOTES:
 1. When building collection, the tags provided must be valid from the StackOverflow site, and included in the global array APPROVED_TAGS as strings on 'stackoverflow.py'
