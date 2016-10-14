@@ -11,6 +11,7 @@ class QuestionsCollection:
 	size = 0
 	htmlparse = True 		   # Set to True if you want to parse answer HTMLs (may hide some links, but provides clearer text)
 	SCORE_MIN = 20				 # Minimum score allowed for questions and answers
+	tags = []
 
 	# Add a single JSON question object
 	def addQuestionJSON(self, questionJSON):
