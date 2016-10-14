@@ -1,12 +1,14 @@
 import pickle
 import requests
+import urllib
 from Question import Question
 from QuestionsCollection import QuestionsCollection
 
+APPROVED_TAGS = ['c++', 'visual-studio']
 API_KEY = ""
 
 class StackOverflow:
-	def requestQuestionsFromAPI(self, startPage, numOfPages):
+	def requestQuestionsFromAPI(self, startPage, numOfPages, tags):
 		# Requests questions from the API 100 at a time
 		# Input: startPage, int for inital page, and endPage, int for the number of pages
 		# Output: An array with JSON objects for question items (as recieved from api.stackexchange.com)
@@ -15,10 +17,36 @@ class StackOverflow:
 		PG_NUM = "<PG_NUM>"
 		KEY_PARAM = "&key="
 		KEY = "<KEY>"
+		TAGS = "<TAGS>"
+
 		questionsJSONar = []
 		questions = []
-		baseurl = "http://api.stackexchange.com/2.2/questions?page=<PG_NUM>&pagesize=100&fromdate=1159574400&todate=1483056000&order=desc&sort=activity&tagged=c%2B%2B;visual-studio&site=stackoverflow&key=<KEY>&filter=!9YdnSIN18"
-		
+		baseurl = "http://api.stackexchange.com/2.2/questions?page=<PG_NUM>&pagesize=100&fromdate=1159574400&todate=1483056000&order=desc&sort=activity&tagged=<TAGS>;visual-studio&site=stackoverflow&key=<KEY>&filter=!9YdnSIN18"
+
+		# Keep track of first tag to avoid adding semi-colon separator
+		firstTag = True
+
+		# Build tags string to place in url
+		# For multiple tags:
+		if len(tags) > 1: 
+			for tag in tags:
+				if firstTag:
+					tagsString = tag
+					firstTag = False
+				else:
+					tagsString += tag
+
+		# For a single tag:
+		elif len(tags) > 0:
+			tagsString = tags[0]
+		# No tags provided
+		else:
+			print "Can't request questions without tags..."
+			return
+
+		# Replace tags in url with tags from input array
+		baseurl = baseurl.replace(TAGS, urllib.quote(tagsString))
+
 		# ADD API KEY to URL only if key provided, else remove argument from URL
 		if API_KEY == "":
 			url = baseurl.replace(KEY,'')
@@ -219,7 +247,7 @@ while userInput != 'X' and userInput != 'XS':
 				try:
 					# Request questions
 					so = StackOverflow()
-					questions_JSON_list = so.requestQuestionsFromAPI(START_PAGE, NUM_OF_PAGES)
+					questions_JSON_list = so.requestQuestionsFromAPI(START_PAGE, NUM_OF_PAGES, collection.tags)
 				
 					# Add new questions to the collection
 					collection.addQuestionsJSON(questions_JSON_list)
@@ -318,6 +346,7 @@ while userInput != 'X' and userInput != 'XS':
 				if userPreference != 'N':
 					collection.htmlparse = True
 
+			# Get user preference on minimum accepted score
 			scoreMin = 20
 			try:
 				scoreMinStr = raw_input('What is the minimum accepted question & answer scores? (default: 20)')
@@ -329,6 +358,37 @@ while userInput != 'X' and userInput != 'XS':
 				print 'Assuming default minimum of 20'
 			collection.SCORE_MIN = scoreMin
 
+			# Get user preference on tags to request
+			gotTags = False
+			while not gotTags:
+				tagsInput = str(raw_input('Enter the tags to include in the collection separated by commas: '))
+				
+				# If no user input provided
+				if tagsInput == '':
+					print "Can't leave empty. Try again..."
+				
+				# User provided input
+				else:
+					tags = []
+					# Set got tags to true, assume it is fine unless later found to be otherwise
+					gotTags = True
+
+					# If contains comma, assume multiple inputs
+					if ',' in tagsInput:
+						items = tagsInput.split(',')
+						for tag in items:
+							tag.strip() # Remove leading/trailing whitespace
+					else:
+						tags.append(tagsInput)
+
+					# Check all tags are approved as per list recieved from stackoverflow
+					for tag in tags:
+						if tag not in APPROVED_TAGS:
+							# All tags must be approved, try again
+							gotTags = False
+							print 'One or more tags provided are not approved, try again...'
+
+			collection.tags = tags
 			COLLECTION_LOADED = True
 
 
