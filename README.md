@@ -34,3 +34,4 @@ Download and execute "stackoverflow.py" using python with no arguments. An inter
 ## Future Changes:
 1. Allow custom tag search (easy) [stackoverflow.py]
 2. Allow API key input through user interaction (without modifying stackoverflow.py)
+3. Add option to export all user-approved question and answer pairs to a JSON file (with filter)
