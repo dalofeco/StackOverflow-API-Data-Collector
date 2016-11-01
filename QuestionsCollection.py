@@ -11,7 +11,7 @@ class QuestionsCollection:
 	size = 0
 	htmlparse = True 		   # Set to True if you want to parse answer HTMLs (may hide some links, but provides clearer text)
 	SCORE_MIN = 20				 # Minimum score allowed for questions and answers
-	tags = []
+	tags = [] 				# List that holds tags related to the collection (to search on stackoverflow)	
 
 	# Add a single JSON question object
 	def addQuestionJSON(self, questionJSON):
@@ -25,7 +25,6 @@ class QuestionsCollection:
 		self.questions[str(question.question_id)] = question
 		self.size += 1
 
-		# Add to id index dictionary
 
 	def addQuestionsJSON(self, questionsJSON):
 	# Add an array of JSON question objects
@@ -38,7 +37,7 @@ class QuestionsCollection:
 		# Directly add question (trusted)
 		if type(question) is Question:
 			self.questions[str(question.question_id)] = question 	# add to dict
-			self.size += 1 																			# update collection size
+			self.size += 1 										  # update collection size
 
 	# Add an array of question objects
 	def addQuestions(self, questions):
@@ -142,16 +141,22 @@ class QuestionsCollection:
 	########### DATA MANAGEMENT METHODS ############
 
 	def verifyAllQuestions(self):
+		# Assume success
+		returnValue = True
+
 		questionNumber = 1
 		for qid, question in self.questions.iteritems():
 			if not question.approved:
 				if question.answerFetched:
 					if not self.verifyQuestion(question, questionNumber):
-						return False		
+						returnValue = False
+						break		
 			questionNumber += 1
-		return True
 
 		self.processQuestions()
+
+		return returnValue
+
 
 	def verifyQuestion(self, question, questionNumber):
 		# NOTE: Parameter is question number, not array index.
@@ -206,7 +211,7 @@ class QuestionsCollection:
 			
 			elif question.answerFetched == True: # If question answer has been fetched
 				# and the answer score is too low
-				if question.answer_score < self.SCORE_MIN: 
+				if (question.answer_score < self.SCORE_MIN): 
 					question.answerUnsatisfiable = True
 					print 'Answer score too low. Deleting...'
 				# (or) and the answer hasn't failed parse AND html parse is on
@@ -256,15 +261,11 @@ class QuestionsCollection:
 
 	# Deletes the question from the dictionary corresponding to the question ID 
 	def deleteQuestion(self, qid):
-		del self.questions[str(qid)]
+		try:
+			del self.questions[str(qid)]
+		except:
+			print 'Could not delete question with id ' + str(qid) + '.' 
 
-	def getApprovedQuestions(self):
-	  approvedQuestions = []
-	  for qid, question in self.questions.iteritems():
-	  	if question.isAnswered:
-	  		if question.question_score > self.SCORE_MIN:
-	  			approvedQuestions.append(question)
-	  return approvedQuestions
 
 	def getUnansweredQuestionIDs(self):
 		unanswered = []

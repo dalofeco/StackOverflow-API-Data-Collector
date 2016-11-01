@@ -63,7 +63,7 @@ class Question:
 	def addAnswerFromJSON(self, JSON, SCORE_MIN):
 	# Add answer values to question object
 	# IN: Takes in an answer JSON object as recieved from StackExchange API request
-	# OUT: Returns true if answer is approved, else marks question as unapproved.
+	# OUT: Returns true if answer satisfies requirements, else marks question as unsatisfiable.
 
 		if JSON['is_accepted'] == True and JSON['score'] >= SCORE_MIN:
 			# If answer has not been recorded or is higher scored, add/replace it.
@@ -71,18 +71,16 @@ class Question:
 				self.answer = JSON['body'].encode('UTF-8')
 				self.answer_score = JSON['score']
 				self.answerFetched = True
-				approved = True
 		else:
 			print 'Answer not accepted'
 			self.answerUnsatisfiable = True
-			approved = False
 
-		return approved
+		return not self.answerUnsatisfiable
 
 	def verifyData(self):
 		# Cannot have answers that are TOO long.
 		if len(self.title) > 200 or len(self.answer) > 10000:
-			print 'Unsatisfiable'
+			print 'Unsatisfiable; too long.'
 			self.answerUnsatisfiable = True
 		if len(self.question_body) > 5000:
 			self.question_body = 'Body too long: deleted.'

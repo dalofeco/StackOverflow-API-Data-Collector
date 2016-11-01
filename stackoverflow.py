@@ -34,7 +34,7 @@ class StackOverflow:
 					tagsString = tag
 					firstTag = False
 				else:
-					tagsString += tag
+					tagsString += ';' + tag
 
 		# For a single tag:
 		elif len(tags) > 0:
@@ -225,7 +225,6 @@ while userInput != 'X' and userInput != 'XS':
 			# Load questions and answers from file
 			collection = collection.load(DEFAULT_FILE_NAME)
 			print 'Loaded!'
-			print collection.questions
 
 		# Request Questions from API
 		if userInput == 'RQ': 
@@ -248,7 +247,6 @@ while userInput != 'X' and userInput != 'XS':
 					# Request questions
 					so = StackOverflow()
 					questions_JSON_list = so.requestQuestionsFromAPI(START_PAGE, NUM_OF_PAGES, collection.tags)
-				
 					# Add new questions to the collection
 					collection.addQuestionsJSON(questions_JSON_list)
 					# Update next page to fetch for next fetching time
@@ -360,6 +358,8 @@ while userInput != 'X' and userInput != 'XS':
 
 			# Get user preference on tags to request
 			gotTags = False
+			# List to store user tags
+			tags = []
 			while not gotTags:
 				tagsInput = str(raw_input('Enter the tags to include in the collection separated by commas: '))
 				
@@ -378,6 +378,7 @@ while userInput != 'X' and userInput != 'XS':
 						items = tagsInput.split(',')
 						for tag in items:
 							tag.strip() # Remove leading/trailing whitespace
+							tags.append(tag)
 					else:
 						tags.append(tagsInput)
 
@@ -387,6 +388,10 @@ while userInput != 'X' and userInput != 'XS':
 							# All tags must be approved, try again
 							gotTags = False
 							print 'One or more tags provided are not approved, try again...'
+
+					if tags == []:
+						print 'Error: Tag array is empty. Try again...'
+						gotTags = False
 
 			collection.tags = tags
 			COLLECTION_LOADED = True
