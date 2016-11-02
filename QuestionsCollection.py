@@ -2,6 +2,7 @@ import pickle
 import requests
 from Question import Question
 from lxml import html
+import json
 
 class QuestionsCollection:
 # 	'Class that contains questions along with their answers, and saves them locally.'
@@ -350,6 +351,16 @@ class QuestionsCollection:
 	def loadFromFile(self, name):
 		self.loadAnswersFromFile(name)
 		self.loadQuestionsFromFile(name)
+
+	def exportToJSON(self, name):
+		questionsDict = []
+
+		for qid, question in self.questions.iteritems():
+			if question.approved:
+				questionsDict.append(question.dictValue())
+
+		with open(name+'.json', 'wb') as saveFile:
+			json.dump(questionsDict, saveFile)
 
 
 # END QuestionsCollection.py

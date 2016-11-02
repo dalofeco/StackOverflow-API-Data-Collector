@@ -28,6 +28,17 @@ class Question:
 	def approve(self):
 		self.approved = True
 
+	def dictValue(self):
+		dictQ = {}
+		dictQ['question_id'] = self.question_id
+		dictQ['question_score'] = self.question_score
+		dictQ['answer_score'] = self.answer_score
+		dictQ['title'] = self.title
+		dictQ['question_body'] = self.question_body
+		dictQ['answer'] = self.answer
+
+		return dictQ
+
 	def parseAnswer(self):
 		if self.answerFetched:
 			try:

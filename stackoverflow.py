@@ -212,7 +212,7 @@ while userInput != 'X' and userInput != 'XS':
 	if COLLECTION_LOADED:
 		# Show more options
 		if userInput == 'M':
-			print "More Options:\n\tDFP: Delete Failed Parse\n\tPA: Parse Answers\n\tUID: Get Unanswered Question IDS\n\tPN: Print Number of Questions\n\tPQ: Process Questions\n"
+			print "More Options:\n\tJ: Export to JSON\n\tDFP: Delete Failed Parse\n\tPA: Parse Answers\n\tUID: Get Unanswered Question IDS\n\tPN: Print Number of Questions\n\tPQ: Process Questions\n"
 		# Print standard options message
 		else:
 			print "Options:\n\tL: Load Questions\n\tS: Save Questions\n\tX: Quit without Saving\n\tXS: Save and Quit\n\tRQ: Request Questions from API\n\tRA: Requests Answers for Questions from API\n\tA: Approve Questions\n\tP: Print Approved With Filter\n\tM: Show More Options"
@@ -299,6 +299,10 @@ while userInput != 'X' and userInput != 'XS':
 		elif userInput == 'XS' or userInput == 'S':
 			collection.save(DEFAULT_FILE_NAME)
 			print 'Saved!'
+
+		# Export to JSON
+		elif userInput == 'J':
+			collection.exportToJSON('questionsCollection')
 
 		# Process Questions
 		elif userInput == 'PQ':
