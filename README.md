@@ -19,6 +19,7 @@ Download and execute "stackoverflow.py" using python with no arguments. An inter
   * X: Quit without Saving
   * A: Approve (goes through all answered questions that satisfy the score requirements, allowing user to approve or disapprove)
   * P: Print Approved Questions with Filter (asks for a keyword filter that checks question and answer for matches)
+  * J: Export as JSON
   
 ## Dependencies:
 1. Pickle (for file saving)
